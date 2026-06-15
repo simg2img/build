@@ -6,6 +6,9 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
+      - name: Cleanup
+        uses: rokibhasansagar/slimhub_actions@main
+        
       - run: |
           sudo apt update && sudo apt install -y bc bison build-essential curl flex g++-multilib gcc-multilib git gnupg gperf libxml2-utils lzop pngcrush schedtool squashfs-tools xsltproc zip zlib1g-dev python3
           
@@ -41,4 +44,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: recovery
-          path: twrp/out/target/product/oppo6765/*.img
+          path: twrp/out/target/product/oppo6765/recovery.img
