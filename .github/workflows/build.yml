@@ -47,10 +47,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: oppo-source/android_kernel_modules_oppo_mt6765
-          path: /tmp/vendor-modules
+          path: vendor-modules
 
       - if: inputs.build_modules
-        run: ln -s /tmp/vendor-modules/source/vendor kernel/vendor
+        run: ln -s ../vendor-modules/source/vendor kernel/vendor
 
       - run: |
           sudo apt-get update
@@ -78,7 +78,7 @@ jobs:
           if [ "${{ inputs.toolchain }}" = "clang" ]; then
             ARGS="$ARGS CC=clang CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld NM=llvm-nm OBJCOPY=llvm-objcopy"
           fi
-          M="/tmp/vendor-modules/source/vendor/oppo_mt6765_modules"
+          M="${{ github.workspace }}/vendor-modules/source/vendor/oppo_mt6765_modules"
           [ -d "$M" ] && make $ARGS M="$M" -j$(nproc)
 
       - name: Upload artifacts
