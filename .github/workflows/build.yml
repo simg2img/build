@@ -32,8 +32,6 @@ on:
 
 env:
   ARCH: arm64
-  CC: ${{ inputs.toolchain == 'gcc' && 'gcc' || 'clang' }}
-  CROSS_COMPILE: ${{ inputs.toolchain == 'gcc' && 'aarch64-linux-gnu-' || 'aarch64-linux-androidkernel-' }}
 
 jobs:
   build:
@@ -55,25 +53,31 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc bison flex libssl-dev libncurses-dev python2 python3 file
 
-      - if: inputs.toolchain == 'gcc'
-        run: |
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+      - run: sudo apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
       - if: inputs.toolchain == 'clang'
-        run: sudo apt-get install -y clang lld
+        run: sudo apt-get install -y clang lld llvm
 
       - name: Build kernel
         working-directory: kernel
         run: |
-          make ${{ inputs.defconfig }}
-          make -j$(nproc)
+          ARGS="CROSS_COMPILE=aarch64-linux-gnu-"
+          if [ "${{ inputs.toolchain }}" = "clang" ]; then
+            ARGS="$ARGS CC=clang CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld NM=llvm-nm OBJCOPY=llvm-objcopy"
+          fi
+          make $ARGS ${{ inputs.defconfig }}
+          make $ARGS -j$(nproc)
 
       - if: inputs.build_modules
         name: Build vendor modules
         working-directory: kernel
         run: |
+          ARGS="CROSS_COMPILE=aarch64-linux-gnu-"
+          if [ "${{ inputs.toolchain }}" = "clang" ]; then
+            ARGS="$ARGS CC=clang CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld NM=llvm-nm OBJCOPY=llvm-objcopy"
+          fi
           M="${{ github.workspace }}/vendor-modules/source/vendor/oppo_mt6765_modules"
-          [ -d "$M" ] && make M="$M" -j$(nproc)
+          [ -d "$M" ] && make $ARGS M="$M" -j$(nproc)
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
