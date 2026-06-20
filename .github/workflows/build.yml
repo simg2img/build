@@ -1,91 +1,81 @@
-name: Build Kernel OPPO MT6765
+name: Build AOSP Recovery Image
 
 on:
   workflow_dispatch:
-    inputs:
-      defconfig:
-        description: Defconfig
-        required: true
-        default: oppo6765_defconfig
-        type: choice
-        options:
-          - oppo6765_defconfig
-          - oppo6765_21281_defconfig
-          - oppo6765_20375_defconfig
-          - oppo6762_21285_defconfig
-          - oppo6779_defconfig
-          - k62v1_64_bsp_defconfig
-          - mediatek_debug_defconfig
-      toolchain:
-        description: Toolchain
-        required: true
-        default: gcc
-        type: choice
-        options:
-          - gcc
-          - clang
-      build_modules:
-        description: Build vendor modules
-        required: true
-        default: true
-        type: boolean
+  push:
+    branches: [ "main" ]
 
 env:
-  ARCH: arm64
+  DEVICE_NAME: oppo6765
+  BUILD_TYPE: eng
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v4
-        with:
-          repository: oppo-source/android_kernel_oppo_mt6765
-          ref: oppo/mt6765_r_11.1.4_a16
-          path: kernel
+    - name: Checkout Device Tree
+      uses: actions/checkout@v4
+      with:
+        path: device/alps/${{ env.DEVICE_NAME }}
 
-      - if: inputs.build_modules
-        uses: actions/checkout@v4
-        with:
-          repository: oppo-source/android_kernel_modules_oppo_mt6765
-          path: vendor-modules
+    - name: Setup Build Environment
+      run: |
+        sudo apt update
+        sudo apt install -y git-core gnupg flex bison build-essential zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 libncurses5-dev x11proto-core-dev libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig python3 repo openjdk-11-jdk android-sdk-platform-tools-common
 
-      - if: inputs.build_modules
-        run: ln -s ../vendor-modules/source/vendor kernel/vendor
+    - name: Download AOSP Source
+      run: |
+        mkdir -p aosp-source
+        cd aosp-source
+        repo init -u https://android.googlesource.com/platform/manifest -b android-11.0.0_r48 --depth=1
+        repo sync -c --no-tags --no-clone-bundle -j$(nproc) \
+          platform/build \
+          platform/build/make \
+          platform/system/core \
+          platform/system/bt \
+          platform/system/logging \
+          platform/system/media \
+          platform/frameworks/av \
+          platform/frameworks/native \
+          platform/frameworks/base \
+          platform/hardware/libhardware \
+          platform/hardware/interfaces \
+          platform/bootable/recovery
+        mkdir -p .repo/local_manifests
+        echo '<?xml version="1.0" encoding="UTF-8"?>
+        <manifest>
+          <project path="device/alps/oppo6765" name="twrpdtgen/android_device_alps_oppo6765" remote="github" revision="main" />
+        </manifest>' > .repo/local_manifests/device.xml
+        repo sync -c --no-tags --no-clone-bundle -j$(nproc)
 
-      - run: |
-          sudo apt-get update
-          sudo apt-get install -y bc bison flex libssl-dev libncurses-dev python2 python3 file
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+    - name: Set up Build Environment
+      run: |
+        cd aosp-source
+        source build/envsetup.sh
+        lunch omni_${{ env.DEVICE_NAME }}-${{ env.BUILD_TYPE }}
 
-      - if: inputs.toolchain == 'clang'
-        run: sudo apt-get install -y clang lld llvm
+    - name: Build Recovery Image
+      run: |
+        cd aosp-source
+        source build/envsetup.sh
+        lunch omni_${{ env.DEVICE_NAME }}-${{ env.BUILD_TYPE }}
+        make -j$(nproc) recoveryimage
 
-      - name: Build kernel
-        working-directory: kernel
-        run: |
-          ARGS="CROSS_COMPILE=aarch64-linux-gnu-"
-          if [ "${{ inputs.toolchain }}" = "clang" ]; then
-            ARGS="$ARGS CC=clang CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld NM=llvm-nm OBJCOPY=llvm-objcopy"
-          fi
-          make $ARGS ${{ inputs.defconfig }}
-          make $ARGS -j$(nproc)
+    - name: Prepare Artifacts
+      if: success()
+      run: |
+        cd aosp-source
+        RECOVERY_IMG=$(find out/target/product/${{ env.DEVICE_NAME }} -name "recovery.img" | head -n 1)
+        if [ -f "$RECOVERY_IMG" ]; then
+          cp $RECOVERY_IMG recovery_${{ env.DEVICE_NAME }}.img
+          echo "RECOVERY_FILE=recovery_${{ env.DEVICE_NAME }}.img" >> $GITHUB_ENV
+        else
+          echo "::error::Recovery image not found!"
+          exit 1
+        fi
 
-      - if: inputs.build_modules
-        name: Build vendor modules
-        working-directory: kernel
-        run: |
-          ARGS="CROSS_COMPILE=aarch64-linux-gnu-"
-          if [ "${{ inputs.toolchain }}" = "clang" ]; then
-            ARGS="$ARGS CC=clang CLANG_TRIPLE=aarch64-linux-gnu- LD=ld.lld NM=llvm-nm OBJCOPY=llvm-objcopy"
-          fi
-          M="${{ github.workspace }}/vendor-modules/source/vendor/oppo_mt6765_modules"
-          [ -d "$M" ] && make $ARGS M="$M" -j$(nproc)
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: kernel-${{ inputs.defconfig }}-${{ inputs.toolchain }}
-          path: |
-            kernel/arch/arm64/boot/Image*
-            kernel/arch/arm64/boot/dts/
-            kernel/**/*.ko
+    - name: Upload Recovery Image
+      uses: actions/upload-artifact@v4
+      with:
+        name: recovery-${{ env.DEVICE_NAME }}
+        path: aosp-source/recovery_${{ env.DEVICE_NAME }}.img
