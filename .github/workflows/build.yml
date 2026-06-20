@@ -11,7 +11,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04  # Fixed: use available runner
+    runs-on: ubuntu-22.04
     steps:
     - name: Checkout Device Tree
       uses: actions/checkout@v4
@@ -28,19 +28,6 @@ jobs:
         mkdir -p aosp-source
         cd aosp-source
         repo init -u https://android.googlesource.com/platform/manifest -b android-11.0.0_r48 --depth=1
-        repo sync -c --no-tags --no-clone-bundle -j$(nproc) \
-          platform/build \
-          platform/build/make \
-          platform/system/core \
-          platform/system/bt \
-          platform/system/logging \
-          platform/system/media \
-          platform/frameworks/av \
-          platform/frameworks/native \
-          platform/frameworks/base \
-          platform/hardware/libhardware \
-          platform/hardware/interfaces \
-          platform/bootable/recovery
         mkdir -p .repo/local_manifests
         echo '<?xml version="1.0" encoding="UTF-8"?>
         <manifest>
