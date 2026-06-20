@@ -40,7 +40,7 @@ jobs:
         <?xml version="1.0" encoding="UTF-8"?>
         <manifest>
           <remote name="github" fetch="https://github.com" />
-          <project path="device/alps/oppo6765" name="twrpdtgen/android_device_alps_oppo6765" remote="github" revision="master" />
+          <project path="device/alps/oppo6765" name="twrpdtgen/android_device_alps_oppo6765" remote="github" revision="vnd_oppo6765-user-11-RP1A.200720.011-1629972958632-release-keys" />
         </manifest>
         EOF
         fi
